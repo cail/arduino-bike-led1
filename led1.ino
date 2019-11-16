@@ -44,12 +44,26 @@ int sats = 0;
 int qual = 0;
 
 uint32_t base_color_fade = pixels.Color(0x5, 0, 0);
-uint32_t base_color = pixels.Color(0xFF, 0, 0);
+uint32_t base_color = pixels.Color(0x60, 0x10, 0x10);
 
-#define VLINES 20
-#define VLINES0 VLINES
-#define VLINES1 34
-#define VLINES2 25
+/*
+--- 0  ->  <- X -
+\
+  \             |
+    1           2
+      \         |
+        \       |
+           \    |
+             \  |
+                \
+*/
+
+#define VLINESX 4
+#define VLINES0 21
+#define VLINES1 29
+#define VLINES2 (TOTALPIXELS-VLINES1-VLINES0-VLINESX)
+
+#define HOR_PIXELS (VLINESX+VLINES0)
 
 #define CENTER (VLINES+VLINES1/2)
 
@@ -80,7 +94,7 @@ void setup() {
 
   //GPS.sendCommand(PMTK_SET_NMEA_UPDATE_200_MILLIHERTZ); // 1 Hz update rate
   
-  useInterrupt(true);
+  useInterrupt(false);
 
   pinMode(LED_BUILTIN, OUTPUT);
   
@@ -150,7 +164,7 @@ void updateGPS()
       speed = -1;
     }
 
-    if (DEBUG_SPEED) {
+    if (DEBUG_SPEED || speed == -1) {
       speed = debug_speed;
       debug_speed = debug_speed+1;
       if (debug_speed > 50) debug_speed = 0;
@@ -161,36 +175,49 @@ void updateGPS()
   
 }
 
-
-int coff = 0;
-int fill_count = 0;
-uint32_t led_timer = millis();
-
-void drawVertical(int coff)
+// 0 .. HOR_PIXELS
+void drawVertical(int hor_offset)
 {
-  coff = coff % (VLINES0);
-  
-  pixels.setPixelColor(coff, base_color);
-  pixels.setPixelColor(TOTALPIXELS - VLINES2 - coff * VLINES1 / VLINES0, base_color);
+  int realoff = hor_offset - VLINESX;
 
-  if (coff == 0)
+  if (realoff >= 0)
+       pixels.setPixelColor(realoff, base_color);
+  else
+       pixels.setPixelColor(TOTALPIXELS + realoff, base_color);
+  
+  pixels.setPixelColor(TOTALPIXELS - VLINESX - VLINES2 - hor_offset * VLINES1 / VLINES0, base_color);
+
+  if (hor_offset == 0)
   {
-    for (int i = coff; i < TOTALPIXELS; i++)
+    for (int i = 0; i < VLINES2; i++)
     {
       pixels.setPixelColor(VLINES0+VLINES1+i, base_color);
     }
   }  
 }
 
-//uint8_t delays[] = { 500, 400, 300, 300, 300, }
+uint16_t delays[] = { 1000, 1000, 500, 400, 300, 200, 100, 90, 80, 70, 60, 50, 40, 30, 25, 20, 15, 10, 9, 8,7,6,5,4, };
+int coff = 0;
+int fill_count = 0;
+uint32_t led_timer = millis();
 
 void loop()
 {
 
-  if (led_timer > millis()) led_timer = millis();     
+  if (led_timer > millis()) led_timer = millis();
+
+  int cdelay = 1;
   
-  if (millis() - led_timer > 1 * max(0,60 - speed*2))
-  //if (false)
+  //cdelay = 1 * max(0,60 - speed*2);
+  cdelay = 4;
+  if (speed < 30 && speed >= 0)
+      cdelay = delays[speed];
+      
+  int framedelay = 0;
+  if (coff == HOR_PIXELS)
+      framedelay = 200 + max(0, 200 - speed*10);
+  
+  if (millis() - led_timer > cdelay + framedelay)
   {
       led_timer = millis();
       
@@ -203,17 +230,16 @@ void loop()
         pixels.setPixelColor(i, pixels.Color(r,r,r));
       }
       for(int i=VLINES0;i<VLINES0+speed;i++){
-        pixels.setPixelColor(i, pixels.Color(3,0,0));
+        pixels.setPixelColor(i, pixels.Color(4,0,0));
       }
-      /*
-      for(int i=TOTALPIXELS-qual; i<TOTALPIXELS; i++){
-        pixels.setPixelColor(i, pixels.Color(0,200,0));
-      }*/
 
       drawVertical(coff);
-      coff = coff + 1;            
-      if (coff > VLINES0)
-          coff = 0;
+      
+      coff = coff - 1;            
+      if (coff < 0)
+      {
+          coff = HOR_PIXELS;
+      }
 
       /*
       pixels.setPixelColor(coff-1, base_color_fade);
